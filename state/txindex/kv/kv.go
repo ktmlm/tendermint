@@ -90,6 +90,19 @@ func (txi *TxIndex) AddBatch(b *txindex.Batch) error {
 	for _, result := range b.Ops {
 		hash := result.Tx.Hash()
 
+		if !result.Result.IsOK() {
+			oldResult, err := txi.Get(hash)
+			if err != nil {
+				return err
+			}
+
+			// if the new transaction failed and it's already indexed in an older block and was successful
+			// we skip it as we want users to get the older successful transaction when they query.
+			if oldResult != nil && oldResult.Result.IsOK() {
+				continue
+			}
+		}
+
 		// index tx by events
 		txi.indexEvents(result, hash, storeBatch)
 
@@ -119,6 +132,19 @@ func (txi *TxIndex) Index(result *types.TxResult) error {
 	defer b.Close()
 
 	hash := result.Tx.Hash()
+
+	if !result.Result.IsOK() {
+		oldResult, err := txi.Get(hash)
+		if err != nil {
+			return err
+		}
+
+		// if the new transaction failed and it's already indexed in an older block and was successful
+		// we skip it as we want users to get the older successful transaction when they query.
+		if oldResult != nil && oldResult.Result.IsOK() {
+			return nil
+		}
+	}
 
 	// index tx by events
 	txi.indexEvents(result, hash, b)
